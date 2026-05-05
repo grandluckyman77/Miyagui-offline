@@ -1,0 +1,214 @@
+name: Build Miyagui APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '17'
+
+jobs:
+  build-web:
+    name: Build Web App
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci --no-audit --progress=false
+
+    - name: Build with Vite
+      run: npm run build
+
+    - name: Upload web build
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-dist
+        path: dist/
+        retention-days: 5
+
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: build-web
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Setup Java ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android SDK components
+      run: |
+        sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+    - name: Download web build
+      uses: actions/download-artifact@v4
+      with:
+        name: web-dist
+        path: dist/
+
+    - name: Install Capacitor dependencies
+      run: |
+        npm ci --no-audit --progress=false
+        npm install @capacitor/core @capacitor/android
+
+    - name: Init Capacitor Android
+      run: |
+        npx cap init miyagui-offline com.miyagui.app --web-dir dist
+        npx cap add android
+
+    - name: Sync Capacitor
+      run: npx cap sync
+
+    - name: Configure Android permissions
+      run: |
+        cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.BATTERY_STATS" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+            <uses-permission android:name="android.permission.VIBRATE" />
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:roundIcon="@mipmap/ic_launcher_round"
+                android:supportsRtl="true"
+                android:theme="@style/AppTheme">
+                <activity
+                    android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                    android:name="com.miyagui.app.MainActivity"
+                    android:label="@string/title_activity_main"
+                    android:theme="@style/AppTheme.NoActionBarLaunch"
+                    android:launchMode="singleTask"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+                <provider
+                    android:name="androidx.core.content.FileProvider"
+                    android:authorities="${applicationId}.fileprovider"
+                    android:exported="false"
+                    android:grantUriPermissions="true">
+                    <meta-data
+                        android:name="android.support.FILE_PROVIDER_PATHS"
+                        android:resource="@xml/file_paths" />
+                </provider>
+            </application>
+        </manifest>
+        EOF
+
+    - name: Build Debug APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleDebug
+
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: miyagui-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+
+    - name: Build Release APK
+      run: |
+        cd android
+        ./gradlew assembleRelease
+      continue-on-error: true
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: miyagui-release-apk
+        path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+        retention-days: 30
+      continue-on-error: true
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download APK artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: miyagui-*-apk
+        merge-multiple: true
+        path: ./apk/
+
+    - name: List APK files
+      run: ls -la ./apk/
+
+    - name: Create Release with APK
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/v')
+      with:
+        files: ./apk/*.apk
+        name: Miyagui Offline ${{ github.ref_name }}
+        body: |
+          ## 🎯 Miyagui Offline v2.0
+
+          APK generado automáticamente via GitHub Actions CI/CD.
+
+          ### 📱 Características:
+          - ✅ **Modo Offline 100%** - Motor heurístico embebido con base de conocimiento táctica
+          - ✅ **Modo Online** - Integración con Gemini API y Groq API
+          - ✅ **Terminal Funcional** - Comandos reales: encrypt, decrypt, hash, calc, battery, network
+          - ✅ **Telemetría Real** - Acelerómetro, giroscopio, batería, información de red
+          - ✅ **Base de Datos Local** - IndexedDB con perfiles, proyectos, sesiones de chat
+          - ✅ **Export/Import JSON** - Backup y restauración de datos
+          - ✅ **PWA** - Service Worker para cacheo offline completo
+
+          ### 📥 Instalación:
+          1. Descarga el APK de abajo
+          2. En tu Android: Configuración → Seguridad → Permitir "Fuentes desconocidas"
+          3. Abre el APK descargado e instálalo
+
+          ### 🔧 Modos de Operación:
+          - **Auto**: Usa API cuando hay internet, fallback offline cuando no
+          - **Solo Local**: Siempre offline, motor heurístico 100% embebido
+          - **Solo API**: Requiere conexión, mejores respuestas con IA cloud
+
+          ---
+          *Build: ${{ github.run_id }} | Commit: ${{ github.sha }}*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
