@@ -10,8 +10,12 @@ jobs:
     name: Build Web App
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name- name: Checkout code
+    uses: actions/checkout@v4
+      - name: Move to correct directory
+        run: |
+        mv miyagui-offline/* .
+        mv miyagui-offline/.* . 2>/dev/null || true
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,6 +38,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Move to correct directory
+        run: |
+        mv miyagui-offline/* .
+        mv miyagui-offline/.* . 2>/dev/null || true
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
