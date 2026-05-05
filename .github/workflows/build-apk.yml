@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
   JAVA_VERSION: '17'
 
 jobs:
@@ -24,10 +24,9 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci --no-audit --progress=false
+      run: npm install --no-audit --progress=false
 
     - name: Build with Vite
       run: npm run build
@@ -52,7 +51,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
 
     - name: Setup Java ${{ env.JAVA_VERSION }}
       uses: actions/setup-java@v4
@@ -75,7 +73,7 @@ jobs:
 
     - name: Install Capacitor dependencies
       run: |
-        npm ci --no-audit --progress=false
+        npm install --no-audit --progress=false
         npm install @capacitor/core @capacitor/android
 
     - name: Init Capacitor Android
@@ -99,7 +97,7 @@ jobs:
             <uses-permission android:name="android.permission.VIBRATE" />
             <uses-permission android:name="android.permission.CAMERA" />
             <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
+            
             <application
                 android:allowBackup="true"
                 android:icon="@mipmap/ic_launcher"
@@ -185,10 +183,10 @@ jobs:
         files: ./apk/*.apk
         name: Miyagui Offline ${{ github.ref_name }}
         body: |
-          ## 🎯 Miyagui Offline v2.0
-
+          ## 🎯 Miyagui Offline v2.0 
+          
           APK generado automáticamente via GitHub Actions CI/CD.
-
+          
           ### 📱 Características:
           - ✅ **Modo Offline 100%** - Motor heurístico embebido con base de conocimiento táctica
           - ✅ **Modo Online** - Integración con Gemini API y Groq API
@@ -197,17 +195,17 @@ jobs:
           - ✅ **Base de Datos Local** - IndexedDB con perfiles, proyectos, sesiones de chat
           - ✅ **Export/Import JSON** - Backup y restauración de datos
           - ✅ **PWA** - Service Worker para cacheo offline completo
-
+          
           ### 📥 Instalación:
           1. Descarga el APK de abajo
           2. En tu Android: Configuración → Seguridad → Permitir "Fuentes desconocidas"
           3. Abre el APK descargado e instálalo
-
+          
           ### 🔧 Modos de Operación:
           - **Auto**: Usa API cuando hay internet, fallback offline cuando no
           - **Solo Local**: Siempre offline, motor heurístico 100% embebido
           - **Solo API**: Requiere conexión, mejores respuestas con IA cloud
-
+          
           ---
           *Build: ${{ github.run_id }} | Commit: ${{ github.sha }}*
       env:
